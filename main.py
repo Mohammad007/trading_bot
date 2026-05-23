@@ -293,6 +293,15 @@ def _build_dashboard(
 # ---------------------------------------------------------------------------
 
 async def main() -> None:
+    # Suppress logging-system exceptions globally. Without this, any error
+    # encountered by a logger during Python interpreter teardown (e.g.
+    # background tasks logging after modules start unloading) raises
+    # ImportError: sys.meta_path is None and spams the log. Trading-relevant
+    # logging still works normally during runtime; this only affects the
+    # tear-down phase. See Python docs: logging.raiseExceptions.
+    import logging
+    logging.raiseExceptions = False
+
     log.info("Booting AI Multi-Chain Sniper... mode=%s chains=%s",
              settings.mode, settings.enabled_chains)
 
@@ -435,6 +444,15 @@ async def main() -> None:
         except Exception:
             pass
         log.info("Goodbye.")
+
+        # Final logger cleanup - flush + close all handlers BEFORE Python
+        # starts unloading modules. Eliminates the noisy ImportError
+        # cascade seen during Railway redeploys.
+        import logging
+        try:
+            logging.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

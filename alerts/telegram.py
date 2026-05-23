@@ -101,12 +101,23 @@ class TelegramBot:
     async def stop(self) -> None:
         if not self._enabled or self.app is None:
             return
-        try:
-            await self.app.updater.stop()
-            await self.app.stop()
-            await self.app.shutdown()
-        except Exception as exc:
-            log.debug("telegram stop error: %s", exc)
+        # Silence python-telegram-bot's own logger BEFORE teardown. The
+        # library's internal `_get_updates_cleanup` tries to log a
+        # "Suppressing error..." ERROR message, which during Python
+        # interpreter shutdown triggers ImportError noise (sys.meta_path
+        # is None). Setting CRITICAL prevents that log from firing.
+        import logging                                       # noqa: PLC0415
+        for lname in ("telegram", "telegram.ext", "httpx", "httpcore"):
+            logging.getLogger(lname).setLevel(logging.CRITICAL)
+
+        # Each stop step has a tight timeout so a network hang during
+        # SIGTERM cleanup (Railway gives ~10s before SIGKILL) cannot
+        # block the rest of the bot's shutdown.
+        for fn in (self.app.updater.stop, self.app.stop, self.app.shutdown):
+            try:
+                await asyncio.wait_for(fn(), timeout=2.0)
+            except (asyncio.TimeoutError, Exception):
+                pass
 
     async def send(self, text: str) -> None:
         if not self._enabled or self.app is None:
