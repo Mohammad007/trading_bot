@@ -73,16 +73,19 @@ async def _get_mint_authority_info(mint: str, rpc_url: str) -> dict:
 
 async def check(snap: TokenSnapshot, rpc_url: Optional[str] = None) -> RugReport:
     """
-    Production-grade rug filter. Same thresholds for PAPER and REAL so the
-    decisions you see in paper are what you will see live.
+    Production-grade rug filter. Same thresholds for PAPER and REAL.
+    Multi-chain aware: Solana mint/freeze authority via RPC; EVM relies
+    on liquidity+age heuristics + DexScreener flags.
     """
     rpc_url = rpc_url or settings.effective_rpc
     reasons: List[str] = []
     risk = 0.0
 
+    chain = (snap.chain or "solana").lower()
+    is_solana = chain == "solana"
     is_pump = (snap.dex or "").lower() in ("pumpfun", "pumpswap")
-    # Pump.fun bonding-curve coins report liquidity differently; relax the
-    # floor for them only, but everything else is uniform.
+
+    # Liquidity floor varies by chain - Pump.fun bonding curve is its own thing.
     min_liq = 1_500 if is_pump else 5_000
 
     if snap.liquidity_usd < min_liq:
@@ -100,19 +103,28 @@ async def check(snap: TokenSnapshot, rpc_url: Optional[str] = None) -> RugReport
         reasons.append("brand-new with thin liquidity")
         risk += 0.20
 
-    # On-chain authority check. For pump.fun, mint authority = bonding curve
-    # PDA which is normal pre-graduation; do not penalize that case.
-    info = await _get_mint_authority_info(snap.mint, rpc_url)
-    if info:
-        if info.get("mint_authority") and not is_pump:
-            reasons.append(f"mint authority not renounced ({info['mint_authority'][:6]}…)")
-            risk += 0.40
-        if info.get("freeze_authority"):
-            reasons.append(f"freeze authority active ({info['freeze_authority'][:6]}…)")
-            risk += 0.40
+    # On-chain authority check — Solana only. EVM tokens use different
+    # contract patterns (ownership, blacklist functions, honeypot checks);
+    # implementing honeypot detection here is a separate project. For now
+    # we rely on liquidity + DexScreener heuristics for EVM.
+    if is_solana:
+        info = await _get_mint_authority_info(snap.mint, rpc_url)
+        if info:
+            if info.get("mint_authority") and not is_pump:
+                reasons.append(f"mint authority not renounced ({info['mint_authority'][:6]}…)")
+                risk += 0.40
+            if info.get("freeze_authority"):
+                reasons.append(f"freeze authority active ({info['freeze_authority'][:6]}…)")
+                risk += 0.40
+        else:
+            reasons.append("could not verify mint/freeze authority")
+            risk += 0.10
     else:
-        reasons.append("could not verify mint/freeze authority")
-        risk += 0.10
+        # EVM heuristic: very thin or stale tokens get a small risk bump
+        # since we cannot check honeypot bytecode here.
+        if snap.liquidity_usd < 10_000:
+            risk += 0.10
+            reasons.append("evm-thin-liq")
 
     safe = risk < 0.55
     return RugReport(safe=safe, risk_score=min(risk, 1.0), reasons=reasons)
