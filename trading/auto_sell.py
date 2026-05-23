@@ -104,11 +104,11 @@ class AutoSeller:
         if legacy.sell:
             return legacy
 
-        # In scalp mode, the only allowed exits are the scalp rules themselves
-        # (handled inside `evaluate`). Skip the chart/flow exits below so the
-        # position cannot be closed by anything except scalp_pct / scalp_usd /
-        # scalp_max_loss.
-        if settings.scalp_mode:
+        # In scalp / exit-on-profit modes, the only allowed exits are the
+        # ones inside `evaluate()` itself. Skip chart/flow exits entirely
+        # so the position can only close via the configured profit / safety
+        # rules.
+        if settings.scalp_mode or settings.exit_on_profit:
             return ExitDecision(sell=False)
 
         pnl_pct = pos.unrealized_pct(price_sol)

@@ -125,6 +125,19 @@ class Settings(BaseModel):
     scalp_profit_usd: float = 1.0
     scalp_max_loss_pct: float = 0.08       # -8% hard stop (was -20%)
 
+    # EXIT-ON-PROFIT mode (most aggressive).
+    # When exit_on_profit=true, *every* other exit rule is bypassed:
+    #   no take profit %, no stop loss %, no trailing, no scalp targets,
+    #   no chart-AI exits, no orderflow exits.
+    # Only TWO triggers remain:
+    #   1. PnL_usd >= exit_on_profit_min_usd  -> SELL (any positive profit)
+    #   2. loss_pct >= emergency_max_loss_pct -> SELL (account safety net)
+    # The emergency stop is INTENTIONALLY non-disableable - without it a
+    # rugged token sits at -99% forever and your bankroll dies.
+    exit_on_profit: bool = False
+    exit_on_profit_min_usd: float = 0.10    # min profit (USD) to trigger. 0 = any +ve.
+    emergency_max_loss_pct: float = 0.50    # -50% absolute floor
+
     # DEX bases
     dexscreener_base: str = "https://api.dexscreener.com"
     raydium_base: str = "https://api.raydium.io"
@@ -240,9 +253,12 @@ def load_settings() -> Settings:
         ai_buy_threshold=_get_float("AI_BUY_THRESHOLD", 0.65),
         ai_sell_threshold=_get_float("AI_SELL_THRESHOLD", 0.35),
         scalp_mode=_get_bool("SCALP_MODE", False),
-        scalp_profit_pct=_get_float("SCALP_PROFIT_PCT", 0.02),
+        scalp_profit_pct=_get_float("SCALP_PROFIT_PCT", 0.03),
         scalp_profit_usd=_get_float("SCALP_PROFIT_USD", 1.0),
-        scalp_max_loss_pct=_get_float("SCALP_MAX_LOSS_PCT", 0.20),
+        scalp_max_loss_pct=_get_float("SCALP_MAX_LOSS_PCT", 0.08),
+        exit_on_profit=_get_bool("EXIT_ON_PROFIT", False),
+        exit_on_profit_min_usd=_get_float("EXIT_ON_PROFIT_MIN_USD", 0.10),
+        emergency_max_loss_pct=_get_float("EMERGENCY_MAX_LOSS_PCT", 0.50),
         dexscreener_base=_get("DEXSCREENER_BASE", "https://api.dexscreener.com"),
         raydium_base=_get("RAYDIUM_BASE", "https://api.raydium.io"),
         pumpfun_base=_get("PUMPFUN_BASE", "https://frontend-api.pump.fun"),

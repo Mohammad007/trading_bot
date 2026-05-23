@@ -1,15 +1,19 @@
 """
 Exit decision evaluator.
 
-Two regimes:
+Three regimes, checked in priority order:
 
-  1) SCALP MODE   (settings.scalp_mode = True)
+  1) EXIT-ON-PROFIT MODE  (settings.exit_on_profit = True)
+     - exit on any PnL >= exit_on_profit_min_usd (default $0.10)
+     - emergency safety: exit on loss_pct >= emergency_max_loss_pct
+     - everything else disabled
+
+  2) SCALP MODE   (settings.scalp_mode = True)
      - exit on profit_pct >= scalp_profit_pct
      - exit on profit_usd >= scalp_profit_usd
      - safety floor: exit on loss_pct >= scalp_max_loss_pct
-     - all other exits (TP/SL/trailing/chart) are bypassed
 
-  2) NORMAL MODE  (default)
+  3) NORMAL MODE  (default)
      - take profit (absolute %)
      - stop loss   (absolute %)
      - trailing stop after activation
@@ -41,6 +45,26 @@ def evaluate(pos: Position, current_price_sol: float, sol_usd: float = _SOL_USD_
         return ExitDecision(sell=False)
 
     pct = (current_price_sol - pos.entry_price) / pos.entry_price
+
+    # --- EXIT-ON-PROFIT MODE (highest priority) -----------------------------
+    if settings.exit_on_profit:
+        # Emergency safety stop - cannot be disabled. Without this, a token
+        # that rugs to -99% would tie up the position forever waiting for
+        # a profit that will never come.
+        if settings.emergency_max_loss_pct > 0 and pct <= -abs(settings.emergency_max_loss_pct):
+            return ExitDecision(sell=True, reason=f"EMERGENCY_STOP ({pct:+.1%})")
+
+        # Any positive PnL above the minimum threshold -> sell.
+        pnl_sol = (current_price_sol - pos.entry_price) * pos.amount_token
+        pnl_usd = pnl_sol * sol_usd
+        if pnl_usd >= settings.exit_on_profit_min_usd:
+            return ExitDecision(
+                sell=True,
+                reason=f"profit_exit +${pnl_usd:.2f} ({pct:+.2%})",
+            )
+
+        # Otherwise hold - all other exit rules are bypassed in this mode.
+        return ExitDecision(sell=False)
 
     # --- SCALP MODE ----------------------------------------------------------
     if settings.scalp_mode:
