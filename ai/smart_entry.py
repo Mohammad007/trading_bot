@@ -163,11 +163,15 @@ def decide(
     rl_action = agent.choose(state_key)
 
     # --- gating ------------------------------------------------------------
-    reasons: List[str] = [f"chart={chart_score:.2f}", f"of={of_score:+.2f}"]
+    # `reasons` is shown to the user in logs - put the DECISION REASON
+    # first, then debug context. Earlier the debug strings hid the real
+    # cause behind `reasons[:2]`.
+    reasons: List[str] = []
+    debug_ctx: List[str] = [f"chart={chart_score:.2f}", f"of={of_score:+.2f}"]
     if chart_sig.notes:
-        reasons.extend(chart_sig.notes[:2])
+        debug_ctx.extend(chart_sig.notes[:2])
     if of_sig.notes:
-        reasons.extend(of_sig.notes[:2])
+        debug_ctx.extend(of_sig.notes[:2])
 
     # --- QUALITY GATES (rug protection without strangling activity) --------
     age_seconds = 0
@@ -189,26 +193,33 @@ def decide(
         quality_block = f"heavy_selling ({snap.buys_5m}B/{snap.sells_5m}S)"
 
     should_buy = False
+    # If AI confidence is STRONGLY above the threshold, ignore RL "SKIP".
+    # The Q-table starts with all-zero values and its tie-break biases to
+    # SKIP for untrained states - that's a chicken-and-egg problem
+    # (RL never explores because it never trades). We force-explore when
+    # AI strongly votes BUY so the Q-table accumulates real data.
+    high_conviction = confidence >= settings.ai_buy_threshold + 0.10
+
     if quality_block is not None:
         reasons.append(quality_block)
-    elif rl_action == "SKIP":
-        reasons.append("rl=SKIP")
     elif confidence < settings.ai_buy_threshold:
         reasons.append(f"conf {confidence:.2f} < buy_thr {settings.ai_buy_threshold:.2f}")
     elif chart_sig.near_resistance and not chart_sig.patterns.structure.bos_up:
         reasons.append("at_resistance_no_bos")
     elif of_sig.conviction < -0.4:
         reasons.append(f"selling pressure ({of_sig.conviction:+.2f})")
+    elif rl_action == "SKIP" and not high_conviction:
+        reasons.append(f"rl=SKIP (conf {confidence:.2f} not strong enough to override)")
     else:
-        # No extra buffer - if confidence >= ai_buy_threshold, buy.
-        # RL "SKIP" already short-circuits above, so HOLD here means "let
-        # the threshold decide".
-        should_buy = (
-            rl_action in ("BUY_SMALL", "BUY_BIG")
-            or confidence >= settings.ai_buy_threshold
-        )
-        if should_buy:
+        should_buy = True
+        if high_conviction and rl_action == "SKIP":
+            reasons.append(f"BUY conf={confidence:.2f} (override rl=SKIP)")
+        else:
             reasons.append(f"BUY conf={confidence:.2f} rl={rl_action}")
+
+    # Debug context (chart/of scores) is appended AFTER the decision reason
+    # so logs show the real cause first.
+    reasons.extend(debug_ctx[:3])
 
     # --- sizing ------------------------------------------------------------
     bankroll = paper_wallet.balance_sol() if not settings.is_real else 1.0  # real-mode bankroll injected elsewhere

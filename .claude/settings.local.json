@@ -24,7 +24,9 @@
       "Bash(python -m compileall -q config.py trading/trailing_stop.py)",
       "Bash(python -m compileall -q analytics/pnl.py alerts/telegram.py)",
       "Bash(python -m compileall -q dex/pumpfun.py)",
-      "Bash(python -m compileall -q alerts/telegram.py main.py)"
+      "Bash(python -m compileall -q alerts/telegram.py main.py)",
+      "Bash(python -m compileall -q ai/smart_entry.py sniper/sniper_engine.py)",
+      "Bash(python -m compileall -q main.py)"
     ]
   }
 }
