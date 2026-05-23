@@ -169,27 +169,24 @@ def decide(
     if of_sig.notes:
         reasons.extend(of_sig.notes[:2])
 
-    # --- HARD QUALITY GATES (skip rugs / 5-sec dumps before they touch us) --
+    # --- QUALITY GATES (rug protection without strangling activity) --------
     age_seconds = 0
     if snap.created_at_ms:
         age_seconds = max(0, (now_ms() - snap.created_at_ms) // 1000)
 
     quality_block: Optional[str] = None
-    # 1. Age: token must have survived initial seconds (rug protection).
-    if 0 < age_seconds < 30:
+    # 1. Age: skip ultra-fresh (under 15s) - first 15s is rug zone.
+    if 0 < age_seconds < 15:
         quality_block = f"too_young ({age_seconds}s)"
-    # 2. Activity: need real demand, not 1 print on a synthesized snap.
-    elif snap.txns_5m < 5:
+    # 2. Activity: need at least *some* real demand (2+ txns).
+    elif snap.txns_5m < 2:
         quality_block = f"too_few_txns ({snap.txns_5m})"
-    # 3. Sells must exist - 100% buys / 0 sells = bot-war target / rug bait.
-    elif snap.buys_5m > 0 and snap.sells_5m == 0 and snap.txns_5m < 20:
-        quality_block = "no_sells_yet (suspicious)"
-    # 4. Liquidity floor (firm).
-    elif snap.liquidity_usd < 3_000:
-        quality_block = f"liquidity ${snap.liquidity_usd:.0f} < $3000"
-    # 5. Multi-signal confirmation - need chart OR flow agreement, not just XGB.
-    elif xgb_score >= 0.7 and of_score < 0.55 and (not has_chart or chart_score < 0.55):
-        quality_block = "no_signal_confirmation (only XGB)"
+    # 3. Liquidity floor - $1500 catches the worst rugs, allows fresh launches.
+    elif snap.liquidity_usd < 1_500:
+        quality_block = f"liquidity ${snap.liquidity_usd:.0f} < $1500"
+    # 4. Strong selling pressure (>2x sells over buys) = let it stabilize first.
+    elif snap.sells_5m > snap.buys_5m * 2 and snap.txns_5m >= 5:
+        quality_block = f"heavy_selling ({snap.buys_5m}B/{snap.sells_5m}S)"
 
     should_buy = False
     if quality_block is not None:
