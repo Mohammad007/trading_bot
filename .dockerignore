@@ -1,0 +1,40 @@
+# Local Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets - NEVER ship into image
+.env
+.env.local
+.env.*.local
+
+# Local state (will be in volume, not image)
+database.db
+database.db-*
+paper_wallet.json
+logs/
+*.log
+
+# AI artifacts
+ai/saved_models/*.json
+ai/saved_models/*.keras
+ai/saved_models/qtable.json
+
+# Dev / IDE
+.git/
+.gitignore
+.vscode/
+.idea/
+.claude/
+*.swp
+.DS_Store
+
+# Docs we do not need at runtime
+*.md
+!README.md

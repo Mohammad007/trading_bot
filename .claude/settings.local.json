@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"d:\\\\trading_bot\")",
+      "Bash(python -c \"import sys; sys.path.insert\\(0, '.'\\); print\\('Python', sys.version\\)\")",
+      "Bash(python -m compileall -q .)",
+      "Bash(python -m compileall .)",
+      "Bash(python -m compileall -q database/db.py trading/position_manager.py)",
+      "Bash(python -m compileall -q alerts/telegram.py)",
+      "Bash(python -c \"from chains import Chain, EVM_CHAINS; print\\(list\\(Chain\\)\\); print\\(list\\(EVM_CHAINS.keys\\(\\)\\)\\)\")",
+      "Bash(python -m compileall -q sniper/rugcheck.py ai/smart_entry.py)",
+      "Bash(python -m compileall -q config.py sniper/rpc_failover.py)",
+      "Bash(python -m compileall -q config.py trading/trailing_stop.py trading/auto_sell.py)",
+      "Bash(python -m compileall -q sniper/sniper_engine.py)",
+      "Bash(python -c ' *)",
+      "Bash(python -m compileall -q sniper/sniper_engine.py ai/smart_entry.py)",
+      "Bash(findstr \"TokenSnapshot now_ms\")",
+      "Bash(python -m compileall -q trading/paper_wallet.py trading/auto_sell.py)",
+      "Bash(python -m compileall -q trading/paper_wallet.py trading/auto_buy.py trading/auto_sell.py sniper/rugcheck.py)",
+      "Bash(python -m compileall -q ai/smart_entry.py config.py trading/auto_sell.py)"
+    ]
+  }
+}

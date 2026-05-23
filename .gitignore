@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.local
+database.db
+database.db-*
+paper_wallet.json
+logs/
+ai/saved_models/*.json
+ai/saved_models/*.keras
+ai/saved_models/qtable.json
+*.log
+.DS_Store

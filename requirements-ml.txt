@@ -1,0 +1,10 @@
+# Optional: TensorFlow for the LSTM trend model.
+#
+# Requires Python 3.10-3.12 (no 3.13 wheels yet, as of 2026-Q1).
+# If you skip this file, ai/lstm_model.py uses its statistical fallback.
+#
+# Install AFTER requirements.txt:
+#     pip install -r requirements-ml.txt
+
+tensorflow-cpu>=2.16,<2.18 ; platform_system != "Darwin"
+tensorflow>=2.16,<2.18     ; platform_system == "Darwin"
