@@ -125,6 +125,16 @@ class Settings(BaseModel):
     scalp_profit_usd: float = 1.0
     scalp_max_loss_pct: float = 0.08       # -8% hard stop (was -20%)
 
+    # Smart profit lock - "human scalper" behavior.
+    # Once price is in profit by at least `smart_lock_arm_pct`, activate a
+    # tight trailing stop with `smart_lock_retrace_pct` pullback. If price
+    # retraces that much from the high-water mark, exit immediately with
+    # whatever profit is left. Catches small consistent wins without
+    # selling on noise.
+    smart_profit_lock: bool = True
+    smart_lock_arm_pct: float = 0.005      # 0.5% - minimum profit to arm
+    smart_lock_retrace_pct: float = 0.003  # 0.3% - peak pullback triggers exit
+
     # DEX bases
     dexscreener_base: str = "https://api.dexscreener.com"
     raydium_base: str = "https://api.raydium.io"
@@ -240,9 +250,12 @@ def load_settings() -> Settings:
         ai_buy_threshold=_get_float("AI_BUY_THRESHOLD", 0.65),
         ai_sell_threshold=_get_float("AI_SELL_THRESHOLD", 0.35),
         scalp_mode=_get_bool("SCALP_MODE", False),
-        scalp_profit_pct=_get_float("SCALP_PROFIT_PCT", 0.02),
+        scalp_profit_pct=_get_float("SCALP_PROFIT_PCT", 0.03),
         scalp_profit_usd=_get_float("SCALP_PROFIT_USD", 1.0),
-        scalp_max_loss_pct=_get_float("SCALP_MAX_LOSS_PCT", 0.20),
+        scalp_max_loss_pct=_get_float("SCALP_MAX_LOSS_PCT", 0.08),
+        smart_profit_lock=_get_bool("SMART_PROFIT_LOCK", True),
+        smart_lock_arm_pct=_get_float("SMART_LOCK_ARM_PCT", 0.005),
+        smart_lock_retrace_pct=_get_float("SMART_LOCK_RETRACE_PCT", 0.003),
         dexscreener_base=_get("DEXSCREENER_BASE", "https://api.dexscreener.com"),
         raydium_base=_get("RAYDIUM_BASE", "https://api.raydium.io"),
         pumpfun_base=_get("PUMPFUN_BASE", "https://frontend-api.pump.fun"),

@@ -48,6 +48,21 @@ def evaluate(pos: Position, current_price_sol: float, sol_usd: float = _SOL_USD_
         if settings.scalp_max_loss_pct > 0 and pct <= -abs(settings.scalp_max_loss_pct):
             return ExitDecision(sell=True, reason=f"scalp_max_loss ({pct:+.1%})")
 
+        # ---- SMART PROFIT LOCK ("human scalper" trailing) ----------------
+        # Once we've been in profit by at least `arm_pct`, watch the peak.
+        # The moment price retraces `retrace_pct` from that peak, exit -
+        # we keep whatever profit is left rather than waiting for the full
+        # scalp_profit_pct target.
+        if settings.smart_profit_lock and pos.high_water > pos.entry_price:
+            peak_pct = (pos.high_water - pos.entry_price) / pos.entry_price
+            if peak_pct >= settings.smart_lock_arm_pct:
+                retrace = (pos.high_water - current_price_sol) / pos.high_water
+                if retrace >= settings.smart_lock_retrace_pct:
+                    return ExitDecision(
+                        sell=True,
+                        reason=f"smart_lock peak={peak_pct:+.2%} now={pct:+.2%} (retrace={retrace:.2%})",
+                    )
+
         # Profit triggers (whichever hits first)
         if settings.scalp_profit_pct > 0 and pct >= settings.scalp_profit_pct:
             return ExitDecision(sell=True, reason=f"scalp_pct {pct:+.2%}")
