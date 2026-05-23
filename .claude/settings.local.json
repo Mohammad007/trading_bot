@@ -22,7 +22,8 @@
       "Bash(python -m compileall -q trading/auto_buy.py trading/auto_sell.py)",
       "Bash(python -m compileall -q ai/smart_entry.py)",
       "Bash(python -m compileall -q config.py trading/trailing_stop.py)",
-      "Bash(python -m compileall -q analytics/pnl.py alerts/telegram.py)"
+      "Bash(python -m compileall -q analytics/pnl.py alerts/telegram.py)",
+      "Bash(python -m compileall -q dex/pumpfun.py)"
     ]
   }
 }
