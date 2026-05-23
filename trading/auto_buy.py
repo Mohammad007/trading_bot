@@ -15,6 +15,7 @@ import time
 from typing import Optional
 
 from ai.smart_entry import SmartEntryDecision
+from alerts.telegram import telegram_bot
 from config import settings
 from database.db import db
 from dex import TokenSnapshot
@@ -79,6 +80,17 @@ async def on_buy_signal(snap: TokenSnapshot, decision: SmartEntryDecision) -> bo
     block_reason = risk_gate.allow_buy()
     if block_reason:
         log.info("buy blocked for %s: %s", snap.symbol or snap.mint[:8], block_reason)
+        # If the daily-loss circuit-breaker just tripped, alert once.
+        if "daily loss" in block_reason and not getattr(risk_gate, "_alerted_today", False):
+            try:
+                import asyncio
+                asyncio.create_task(telegram_bot.send(
+                    f"⚠️ Daily loss limit hit ({risk_gate.daily_realized_usd:+.2f} USDT). "
+                    f"New buys are now blocked for the rest of the day."
+                ))
+                risk_gate._alerted_today = True  # type: ignore[attr-defined]
+            except Exception:
+                pass
         return False
 
     amount_sol = max(decision.suggested_sol, 0.001)
@@ -116,7 +128,27 @@ async def _paper_buy(snap: TokenSnapshot, decision: SmartEntryDecision, amount_s
         amount_sol=amount_sol,
         ai_score=decision.confidence,
     )
+    _push_buy_alert(snap, amount_sol, price_sol, decision, mode="PAPER")
     return True
+
+
+def _push_buy_alert(snap: TokenSnapshot, amount_sol: float, price_sol: float,
+                    decision: SmartEntryDecision, mode: str) -> None:
+    """Fire-and-forget Telegram push (does not block the trade flow)."""
+    msg = (
+        f"🟢 BUY [{mode}]  {snap.symbol or snap.mint[:8]}\n"
+        f"DEX: {snap.dex or '-'}\n"
+        f"Price: {price_sol:.10f} SOL\n"
+        f"Amount: {amount_sol:.4f} SOL\n"
+        f"Liquidity: ${snap.liquidity_usd:,.0f}\n"
+        f"AI conf: {decision.confidence:.2f}  (xgb={decision.xgb_score:.2f} chart={decision.chart_score:.2f})\n"
+        f"Mint: {snap.mint}"
+    )
+    try:
+        import asyncio
+        asyncio.create_task(telegram_bot.send(msg))
+    except Exception:
+        pass
 
 
 async def _real_buy(snap: TokenSnapshot, decision: SmartEntryDecision, amount_sol: float) -> bool:
@@ -169,5 +201,6 @@ async def _real_buy(snap: TokenSnapshot, decision: SmartEntryDecision, amount_so
         amount_sol=amount_sol,
         ai_score=decision.confidence,
     )
+    _push_buy_alert(snap, amount_sol, price_sol, decision, mode="REAL")
     await rotator.on_trade()
     return True

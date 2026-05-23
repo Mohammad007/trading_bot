@@ -17,7 +17,9 @@
       "Bash(findstr \"TokenSnapshot now_ms\")",
       "Bash(python -m compileall -q trading/paper_wallet.py trading/auto_sell.py)",
       "Bash(python -m compileall -q trading/paper_wallet.py trading/auto_buy.py trading/auto_sell.py sniper/rugcheck.py)",
-      "Bash(python -m compileall -q ai/smart_entry.py config.py trading/auto_sell.py)"
+      "Bash(python -m compileall -q ai/smart_entry.py config.py trading/auto_sell.py)",
+      "Bash(python -m compileall -q config.py main.py trading/paper_wallet.py)",
+      "Bash(python -m compileall -q trading/auto_buy.py trading/auto_sell.py)"
     ]
   }
 }

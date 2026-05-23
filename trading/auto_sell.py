@@ -21,6 +21,7 @@ from ai.orderflow_ai import evaluate as orderflow_evaluate
 from ai.reinforcement import agent, discretize
 from ai.smart_entry import _features
 from ai.xgb_model import xgb_model
+from alerts.telegram import telegram_bot
 from config import settings
 from database.db import db
 from dex.dexscreener import dexscreener
@@ -148,13 +149,28 @@ class AutoSeller:
     # ------------------------------------------------------------------
 
     async def _exit(self, pos: Position, price_sol: float, reason: str) -> None:
+        pnl_pct = pos.unrealized_pct(price_sol) * 100
         log.info("[EXIT] %s reason=%s pnl=%+.1f%%",
-                 pos.token_symbol or pos.token_mint[:8],
-                 reason, pos.unrealized_pct(price_sol) * 100)
+                 pos.token_symbol or pos.token_mint[:8], reason, pnl_pct)
 
         realized_sol = pos.amount_token * price_sol
         pnl_sol = realized_sol - pos.amount_sol
         pnl_usd = pnl_sol * 150.0
+
+        # Telegram push - emoji indicates win / loss.
+        emoji = "🟢" if pnl_sol > 0 else "🔴"
+        try:
+            import asyncio
+            mode_tag = "REAL" if settings.is_real else "PAPER"
+            msg = (
+                f"{emoji} SELL [{mode_tag}]  {pos.token_symbol or pos.token_mint[:8]}\n"
+                f"Reason: {reason}\n"
+                f"PnL: {pnl_sol:+.4f} SOL  ({pnl_pct:+.1f}%)\n"
+                f"Exit price: {price_sol:.10f} SOL"
+            )
+            asyncio.create_task(telegram_bot.send(msg))
+        except Exception:
+            pass
 
         # Wallet leg may throw (network, serialization, RPC). The position MUST
         # still be closed in position_manager, otherwise the next tick re-fires
