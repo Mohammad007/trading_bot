@@ -12,12 +12,8 @@ class TokenSnapshot:
     symbol: str = ""
     name: str = ""
     dex: str = ""
-    # Chain id from DexScreener: 'solana', 'ethereum', 'bsc', 'polygon',
-    # 'base', 'arbitrum', 'optimism', 'avalanche', etc.
-    chain: str = "solana"
     pair_address: str = ""
     price_usd: float = 0.0
-    # For solana = SOL/token. For EVM = native-token-per-token (ETH/BNB/MATIC).
     price_sol: float = 0.0
     liquidity_usd: float = 0.0
     volume_24h_usd: float = 0.0

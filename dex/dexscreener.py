@@ -75,7 +75,6 @@ class DexScreener:
                 symbol=base.get("symbol", ""),
                 name=base.get("name", ""),
                 dex=str(p.get("dexId", "")),
-                chain=str(p.get("chainId", "solana")).lower(),
                 pair_address=p.get("pairAddress", ""),
                 price_usd=price_usd,
                 price_sol=price_native,
@@ -95,32 +94,25 @@ class DexScreener:
         except (TypeError, ValueError):
             return None
 
-    @staticmethod
-    def _enabled() -> set[str]:
-        """Lowercased set of enabled chain IDs from settings."""
-        return {c.strip().lower() for c in settings.enabled_chains if c.strip()}
-
     async def get_token(self, mint: str) -> Optional[TokenSnapshot]:
         data = await self._get(f"/latest/dex/tokens/{mint}")
         if not data:
             return None
         pairs = data.get("pairs") or []
-        enabled = self._enabled()
-        matching = [p for p in pairs if str(p.get("chainId", "")).lower() in enabled]
-        if not matching:
+        sol_pairs = [p for p in pairs if p.get("chainId") == "solana"]
+        if not sol_pairs:
             return None
-        # Choose the deepest-liquidity pair within enabled chains.
-        matching.sort(key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0), reverse=True)
-        return self._parse_pair(matching[0])
+        # Choose the deepest-liquidity pair.
+        sol_pairs.sort(key=lambda p: float((p.get("liquidity") or {}).get("usd") or 0), reverse=True)
+        return self._parse_pair(sol_pairs[0])
 
     async def search(self, query: str) -> List[TokenSnapshot]:
         data = await self._get("/latest/dex/search", params={"q": query})
         if not data:
             return []
-        enabled = self._enabled()
         out: List[TokenSnapshot] = []
         for p in data.get("pairs") or []:
-            if str(p.get("chainId", "")).lower() not in enabled:
+            if p.get("chainId") != "solana":
                 continue
             snap = self._parse_pair(p)
             if snap:
@@ -128,13 +120,13 @@ class DexScreener:
         return out
 
     async def trending(self) -> List[TokenSnapshot]:
-        """Return tokens currently boosted on DexScreener across enabled chains."""
+        """Return Solana tokens currently boosted on DexScreener."""
         data = await self._get("/token-boosts/latest/v1")
         if not data:
             return []
         results: List[TokenSnapshot] = []
         items = data if isinstance(data, list) else data.get("items", []) or []
-        enabled = self._enabled()
+        # Each boost item has a tokenAddress; resolve in parallel (capped).
         sem = asyncio.Semaphore(5)
 
         async def _resolve(addr: str) -> None:
@@ -145,7 +137,7 @@ class DexScreener:
 
         tasks = []
         for it in items:
-            if str(it.get("chainId", "")).lower() not in enabled:
+            if it.get("chainId") != "solana":
                 continue
             addr = it.get("tokenAddress")
             if addr:

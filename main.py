@@ -293,24 +293,6 @@ def _build_dashboard(
 # ---------------------------------------------------------------------------
 
 async def main() -> None:
-    # Suppress logging-system exceptions globally. Without this, any error
-    # encountered by a logger during Python interpreter teardown (e.g.
-    # background tasks logging after modules start unloading) raises
-    # ImportError: sys.meta_path is None and spams the log. Trading-relevant
-    # logging still works normally during runtime; this only affects the
-    # tear-down phase. See Python docs: logging.raiseExceptions.
-    import logging
-    logging.raiseExceptions = False
-
-    # Also silence unraisable exceptions. aiohttp's ClientSession.__del__
-    # runs during garbage collection (sometimes mid-Python-teardown) and
-    # tries to warn about unclosed sessions. That warning goes through
-    # `sys.unraisablehook` which prints a full traceback. We override the
-    # hook to drop these silently. Real exceptions during normal runtime
-    # are unaffected because nothing is "unraisable" then.
-    import sys
-    sys.unraisablehook = lambda _unraisable: None
-
     log.info("Booting AI Multi-Chain Sniper... mode=%s chains=%s",
              settings.mode, settings.enabled_chains)
 
@@ -447,31 +429,12 @@ async def main() -> None:
             await telegram_bot.stop()
         except Exception:
             pass
-
-        # Close EVERY aiohttp ClientSession explicitly so its __del__ does
-        # not fire during Python's interpreter teardown (which causes the
-        # noisy "ImportError: sys.meta_path is None" chain). Each close()
-        # is wrapped because a session that was never opened is also OK.
-        from dex.pumpfun import pumpfun        # noqa: PLC0415
-        from dex.raydium import raydium        # noqa: PLC0415
-        from dex.meteora import meteora        # noqa: PLC0415
-        for closer in (dexscreener.close, pumpfun.close, raydium.close,
-                       meteora.close, jupiter.close):
-            try:
-                await closer()
-            except Exception:
-                pass
-
-        log.info("Goodbye.")
-
-        # Final logger cleanup - flush + close all handlers BEFORE Python
-        # starts unloading modules. Eliminates the noisy ImportError
-        # cascade seen during Railway redeploys.
-        import logging
         try:
-            logging.shutdown()
+            await dexscreener.close()
+            await jupiter.close()
         except Exception:
             pass
+        log.info("Goodbye.")
 
 
 if __name__ == "__main__":

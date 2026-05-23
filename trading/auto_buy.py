@@ -94,15 +94,9 @@ async def on_buy_signal(snap: TokenSnapshot, decision: SmartEntryDecision) -> bo
         return False
 
     amount_sol = max(decision.suggested_sol, 0.001)
-    chain = (snap.chain or "solana").lower()
 
     if settings.is_real:
-        if chain == "solana":
-            return await _real_buy(snap, decision, amount_sol)
-        # EVM path - Uniswap V2 router covers Uniswap/Pancake/QuickSwap/etc.
-        return await _real_buy_evm(snap, decision, amount_sol)
-    # PAPER mode - same simulator works for any chain; price_sol is the
-    # chain-native price (SOL/ETH/BNB/MATIC per token).
+        return await _real_buy(snap, decision, amount_sol)
     return await _paper_buy(snap, decision, amount_sol)
 
 
@@ -209,74 +203,4 @@ async def _real_buy(snap: TokenSnapshot, decision: SmartEntryDecision, amount_so
     )
     _push_buy_alert(snap, amount_sol, price_sol, decision, mode="REAL")
     await rotator.on_trade()
-    return True
-
-
-async def _real_buy_evm(snap: TokenSnapshot, decision: SmartEntryDecision, amount_native: float) -> bool:
-    """REAL buy on any EVM chain via Uniswap V2 router (Pancake/Sushi/etc)."""
-    from chains import Chain, EVM_CHAINS                            # noqa: PLC0415
-    from chains.evm.uniswap_v2 import uniswap_v2                    # noqa: PLC0415
-    from chains.evm.wallet import get_evm_wallet                    # noqa: PLC0415
-
-    try:
-        chain = Chain(snap.chain.lower())
-    except ValueError:
-        log.error("EVM buy aborted: unknown chain '%s'", snap.chain)
-        return False
-    if chain not in EVM_CHAINS:
-        log.error("EVM buy aborted: %s not in EVM_CHAINS", chain.value)
-        return False
-    wallet = get_evm_wallet()
-    if wallet is None:
-        log.error("EVM buy aborted: no EVM wallet configured")
-        return False
-
-    # Convert "amount_native" (in chain's native, here passed as our SOL-sized
-    # unit) to wei. We treat 1 unit of `amount_native` as 1 unit of the
-    # chain-native coin (ETH/BNB/MATIC). Same numerical contract as Solana SOL.
-    amount_wei = int(amount_native * 1e18)
-
-    tx_hash = uniswap_v2.swap_native_for_token(
-        chain=chain,
-        token_out=snap.mint,
-        amount_in_wei=amount_wei,
-        slippage_bps=settings.slippage_bps,
-    )
-    if not tx_hash:
-        log.warning("EVM buy failed for %s on %s", snap.symbol or snap.mint[:8], chain.value)
-        return False
-
-    # Read filled balance back
-    try:
-        token_balance = wallet.token_balance(chain.value, snap.mint)
-    except Exception:
-        token_balance = 0.0
-
-    price_native = snap.price_sol if snap.price_sol > 0 else (
-        amount_native / max(token_balance, 1e-9)
-    )
-    db.log_trade(
-        ts=now_ms(),
-        mode="REAL",
-        side="BUY",
-        token_mint=snap.mint,
-        token_symbol=snap.symbol,
-        dex=f"{chain.value}:{snap.dex}",
-        amount_sol=amount_native,
-        amount_token=token_balance,
-        price_sol=price_native,
-        tx_sig=tx_hash,
-        ai_score=decision.confidence,
-        notes=f"uniswap_v2-{chain.value}",
-    )
-    await position_manager.open(
-        token_mint=snap.mint,
-        token_symbol=snap.symbol,
-        dex=f"{chain.value}:{snap.dex}",
-        entry_price_sol=price_native,
-        amount_token=token_balance,
-        amount_sol=amount_native,
-        ai_score=decision.confidence,
-    )
-    _push_buy_alert(snap, amount_native, price_native, decision, mode=f"REAL-{chain.value.upper()}")
     return True

@@ -77,10 +77,6 @@ class TelegramBot:
         self.app.add_handler(CommandHandler("sell", self._h_sell))
         self.app.add_handler(CommandHandler("mode", self._h_mode))
         self.app.add_handler(CommandHandler("winrate", self._h_winrate))
-        self.app.add_handler(CommandHandler("profit", self._h_profit))
-        self.app.add_handler(CommandHandler("loss", self._h_loss))
-        self.app.add_handler(CommandHandler("lose", self._h_loss))    # alias
-        self.app.add_handler(CommandHandler("pnl", self._h_pnl))
 
         # Swallow polling-loop errors (e.g. Conflict when a stale instance is
         # still holding the long-poll). The Updater retries automatically.
@@ -101,23 +97,12 @@ class TelegramBot:
     async def stop(self) -> None:
         if not self._enabled or self.app is None:
             return
-        # Silence python-telegram-bot's own logger BEFORE teardown. The
-        # library's internal `_get_updates_cleanup` tries to log a
-        # "Suppressing error..." ERROR message, which during Python
-        # interpreter shutdown triggers ImportError noise (sys.meta_path
-        # is None). Setting CRITICAL prevents that log from firing.
-        import logging                                       # noqa: PLC0415
-        for lname in ("telegram", "telegram.ext", "httpx", "httpcore"):
-            logging.getLogger(lname).setLevel(logging.CRITICAL)
-
-        # Each stop step has a tight timeout so a network hang during
-        # SIGTERM cleanup (Railway gives ~10s before SIGKILL) cannot
-        # block the rest of the bot's shutdown.
-        for fn in (self.app.updater.stop, self.app.stop, self.app.shutdown):
-            try:
-                await asyncio.wait_for(fn(), timeout=2.0)
-            except (asyncio.TimeoutError, Exception):
-                pass
+        try:
+            await self.app.updater.stop()
+            await self.app.stop()
+            await self.app.shutdown()
+        except Exception as exc:
+            log.debug("telegram stop error: %s", exc)
 
     async def send(self, text: str) -> None:
         if not self._enabled or self.app is None:
@@ -229,57 +214,6 @@ class TelegramBot:
         msg = (
             f"7d:  {w7.wins}W / {w7.losses}L  ({w7.winrate:.1%})\n"
             f"All: {wall.wins}W / {wall.losses}L  ({wall.winrate:.1%})"
-        )
-        await update.message.reply_text(msg)
-
-    async def _h_profit(self, update, context) -> None:
-        if not self._auth_ok(update):
-            return
-        from analytics.pnl import compute_profit_loss_breakdown
-        b = compute_profit_loss_breakdown()
-        if b.wins == 0:
-            await update.message.reply_text("No winning trades yet.")
-            return
-        msg = (
-            f"💰 PROFIT  (winning trades only)\n"
-            f"Wins:        {b.wins}\n"
-            f"Total:       +${b.profit_usd:.2f}  (+{b.profit_sol:.4f} SOL)\n"
-            f"Avg win:     +${b.avg_win_usd:.2f}\n"
-            f"Biggest:     +${b.biggest_win_usd:.2f}"
-        )
-        await update.message.reply_text(msg)
-
-    async def _h_loss(self, update, context) -> None:
-        if not self._auth_ok(update):
-            return
-        from analytics.pnl import compute_profit_loss_breakdown
-        b = compute_profit_loss_breakdown()
-        if b.losses == 0:
-            await update.message.reply_text("No losing trades yet.")
-            return
-        msg = (
-            f"📉 LOSS  (losing trades only)\n"
-            f"Losses:      {b.losses}\n"
-            f"Total:       ${b.loss_usd:.2f}  ({b.loss_sol:.4f} SOL)\n"
-            f"Avg loss:    ${b.avg_loss_usd:.2f}\n"
-            f"Worst:       ${b.biggest_loss_usd:.2f}"
-        )
-        await update.message.reply_text(msg)
-
-    async def _h_pnl(self, update, context) -> None:
-        """Net P&L summary - profits + losses combined."""
-        if not self._auth_ok(update):
-            return
-        from analytics.pnl import compute_profit_loss_breakdown
-        b = compute_profit_loss_breakdown()
-        net = b.net_usd
-        emoji = "🟢" if net >= 0 else "🔴"
-        msg = (
-            f"{emoji} NET PnL  (all closed trades)\n"
-            f"Profit:   +${b.profit_usd:.2f}  ({b.wins} trades)\n"
-            f"Loss:     ${b.loss_usd:.2f}  ({b.losses} trades)\n"
-            f"Net:      {net:+.2f} USD\n"
-            f"Winrate:  {(b.wins / max(b.wins + b.losses, 1)) * 100:.1f}%"
         )
         await update.message.reply_text(msg)
 

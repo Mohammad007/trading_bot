@@ -94,26 +94,13 @@ class PumpFun:
     async def stream_new_tokens(self) -> AsyncIterator[Dict[str, Any]]:
         """
         Async generator yielding new-token events. Reconnects automatically.
-
-        Logging policy:
-          - First failure after a successful connection -> WARNING (visible).
-          - Subsequent retry failures while still down  -> DEBUG (silent).
-          - Recovery from down-state                    -> INFO.
-        Prevents spam during pumpportal outages.
         """
         import websockets  # local import to keep top-level light
         backoff = 1.0
-        was_connected = False
-        warned_about_outage = False
         while True:
             try:
                 async with websockets.connect(PUMP_WS, ping_interval=20) as ws:
-                    if warned_about_outage:
-                        log.info("pump.fun WS reconnected after outage.")
-                        warned_about_outage = False
-                    else:
-                        log.info("pump.fun WS connected.")
-                    was_connected = True
+                    log.info("pump.fun WS connected.")
                     backoff = 1.0
                     await ws.send('{"method":"subscribeNewToken"}')
                     async for raw in ws:
@@ -125,12 +112,7 @@ class PumpFun:
                         if isinstance(msg, dict) and (msg.get("mint") or msg.get("txType") == "create"):
                             yield msg
             except Exception as exc:
-                if was_connected and not warned_about_outage:
-                    log.warning("pump.fun WS dropped: %s (auto-reconnecting)", exc)
-                    warned_about_outage = True
-                else:
-                    log.debug("pump.fun WS still unavailable: %s", exc)
-                was_connected = False
+                log.warning("pump.fun WS error: %s (retry in %.1fs)", exc, backoff)
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 30.0)
 

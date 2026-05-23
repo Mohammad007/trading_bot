@@ -229,16 +229,6 @@ class AutoSeller:
         await rotator.on_trade()
 
     async def _real_exit(self, pos: Position, price_sol: float) -> Optional[str]:
-        # Chain dispatch - `pos.dex` is stored as "chain:dex" for EVM (e.g.
-        # "bsc:pancakeswap"), or plain for Solana.
-        chain = "solana"
-        if ":" in (pos.dex or ""):
-            chain = pos.dex.split(":", 1)[0].lower()
-        if chain == "solana":
-            return await self._real_exit_solana(pos, price_sol)
-        return await self._real_exit_evm(pos, price_sol, chain)
-
-    async def _real_exit_solana(self, pos: Position, price_sol: float) -> Optional[str]:
         wallet = await get_real_wallet()
         if wallet is None:
             log.error("real exit blocked: wallet missing")
@@ -269,56 +259,6 @@ class AutoSeller:
             return sig
         except Exception as exc:
             log.error("real exit failed: %s", exc)
-            return None
-
-    async def _real_exit_evm(self, pos: Position, price_native: float, chain_str: str) -> Optional[str]:
-        from chains import Chain, EVM_CHAINS                       # noqa: PLC0415
-        from chains.evm.uniswap_v2 import uniswap_v2               # noqa: PLC0415
-        from chains.evm.wallet import get_evm_wallet               # noqa: PLC0415
-
-        try:
-            chain = Chain(chain_str)
-        except ValueError:
-            log.error("EVM exit aborted: unknown chain '%s'", chain_str)
-            return None
-        if chain not in EVM_CHAINS:
-            return None
-        wallet = get_evm_wallet()
-        if wallet is None:
-            log.error("EVM exit blocked: no EVM wallet")
-            return None
-
-        # Approve router first (uniswap v2 requires approval for token spend).
-        spec = EVM_CHAINS[chain]
-        try:
-            decimals = 18  # ERC20 default; most meme tokens follow this
-            raw_units = int(pos.amount_token * (10 ** decimals))
-            if raw_units <= 0:
-                return None
-            wallet.approve(chain.value, pos.token_mint, spec.uniswap_v2_router, raw_units)
-            tx_hash = uniswap_v2.swap_token_for_native(
-                chain=chain,
-                token_in=pos.token_mint,
-                amount_in_units=raw_units,
-                slippage_bps=settings.slippage_bps,
-            )
-            if tx_hash:
-                db.log_trade(
-                    ts=now_ms(),
-                    mode="REAL",
-                    side="SELL",
-                    token_mint=pos.token_mint,
-                    token_symbol=pos.token_symbol,
-                    dex=pos.dex,
-                    amount_sol=pos.amount_token * price_native,
-                    amount_token=pos.amount_token,
-                    price_sol=price_native,
-                    tx_sig=tx_hash,
-                    notes=f"uniswap_v2-{chain.value}-exit",
-                )
-            return tx_hash
-        except Exception as exc:
-            log.error("EVM exit failed: %s", exc)
             return None
 
 

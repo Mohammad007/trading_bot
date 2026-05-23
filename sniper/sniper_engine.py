@@ -280,13 +280,11 @@ class SniperEngine:
 
         decision = decide(snap)
         verdict = "BUY" if decision.should_buy else "skip"
-        # Show 4 reasons: first is the actual decision cause, rest is context.
-        reason = " | ".join(decision.reasons[:4]) if decision.reasons else ""
-        chain_tag = (snap.chain or "sol")[:3]
+        # Always show the WHY so the user can debug gating.
+        reason = "; ".join(decision.reasons[:2]) if decision.reasons else ""
         log.info(
-            "[%s/%s] %s liq=$%.0f vol5m=$%.0f bp=%+.2f xgb=%.2f conf=%.2f -> %s | %s",
-            source, chain_tag,
-            snap.symbol or snap.mint[:8],
+            "[%s] %s liq=$%.0f vol5m=$%.0f bp=%+.2f xgb=%.2f conf=%.2f -> %s | %s",
+            source, snap.symbol or snap.mint[:8],
             snap.liquidity_usd, snap.volume_5m_usd, snap.buy_pressure,
             decision.xgb_score, decision.confidence,
             verdict, reason,
