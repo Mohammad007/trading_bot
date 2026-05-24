@@ -79,6 +79,11 @@ class QAgent:
 
     def choose(self, state: str) -> str:
         row = self._row(state)
+        # Untrained state (all zeros): return HOLD so the AI-confidence
+        # threshold decides. SKIP would win the index tie-break and lock
+        # out every novel meme-coin state forever.
+        if all(v == 0.0 for v in row.values()):
+            return "HOLD"
         if random.random() < self.epsilon:
             return random.choice(ACTIONS)
         # Argmax with tie-breaking favoring conservative actions.

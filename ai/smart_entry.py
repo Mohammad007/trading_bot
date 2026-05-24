@@ -149,12 +149,18 @@ def decide(
             + 0.10 * max(heat, 0.0)
         )
     else:
-        # Fresh-token regime: heavier on XGB pump probability + flow.
+        # Fresh-token regime: no chart history yet. The orderflow cache is
+        # also usually empty on the first tick, so include the DexScreener
+        # buy_pressure as a tape proxy. Without this, high-XGB tokens with
+        # real demand (e.g. bp=+0.66) stall at conf~0.62 and never cross
+        # the 0.65 buy threshold.
+        bp_norm = clamp((snap.buy_pressure + 1.0) / 2.0, 0.0, 1.0)
         blended = (
-            0.55 * xgb_score
-            + 0.20 * of_score
-            + 0.15 * sm_score
-            + 0.10 * max(heat, 0.0)
+            0.50 * xgb_score
+            + 0.20 * bp_norm
+            + 0.15 * of_score
+            + 0.10 * sm_score
+            + 0.05 * max(heat, 0.0)
         )
     confidence = clamp(blended, 0.0, 1.0)
 
