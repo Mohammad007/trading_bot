@@ -30,7 +30,9 @@
       "Bash(git -C d:/trading_bot log --oneline -20 -- ai/smart_entry.py sniper/sniper_engine.py sniper/rugcheck.py)",
       "Bash(git -C d:/trading_bot log --oneline -10)",
       "Bash(git -C d:/trading_bot show 9e2a7fa --stat)",
-      "Bash(git -C d:/trading_bot show 9e2a7fa -- ai/smart_entry.py)"
+      "Bash(git -C d:/trading_bot show 9e2a7fa -- ai/smart_entry.py)",
+      "Bash(cd /d d:/trading_bot)",
+      "Bash(python main.py)"
     ]
   }
 }

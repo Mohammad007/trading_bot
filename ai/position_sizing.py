@@ -34,7 +34,7 @@ class SizingPlan:
 
 # Defaults; tune via env if you want.
 RISK_PER_TRADE = 0.02    # 2% of bankroll per trade at max confidence
-MIN_SIZE_FRACTION = 0.25
+MIN_SIZE_FRACTION = 1.0
 MAX_SIZE_FRACTION = 2.0
 ATR_STOP_MULT = 2.0
 ATR_TP_MULT = 4.0
