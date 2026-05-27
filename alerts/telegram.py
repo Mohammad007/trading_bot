@@ -162,20 +162,56 @@ class TelegramBot:
     async def _h_balance(self, update, context) -> None:
         if not self._auth_ok(update):
             return
-        from trading.paper_wallet import paper_wallet
+        from trading.paper_wallet import paper_wallet, _SOL_USD_DEFAULT
+        from analytics.pnl import compute_realized_pnl
         if settings.is_real:
             from trading.real_wallet import get_real_wallet
             w = await get_real_wallet()
             if w:
                 sol = await w.get_sol_balance()
-                await update.message.reply_text(f"REAL wallet: {sol:.4f} SOL")
+                realized = compute_realized_pnl(_SOL_USD_DEFAULT)
+                pnl_emoji = "🟢" if realized.total_sol >= 0 else "🔴"
+                await update.message.reply_text(
+                    f"REAL wallet: {sol:.4f} SOL\n"
+                    f"{pnl_emoji} Realized PnL: {realized.total_sol:+.4f} SOL "
+                    f"(${realized.total_usd_approx:+.2f})\n"
+                    f"Closed trades: {realized.trades}  "
+                    f"({realized.wins}W / {realized.losses}L, {realized.winrate:.0%})"
+                )
                 return
             await update.message.reply_text("Real wallet not loaded.")
             return
-        await update.message.reply_text(
-            f"PAPER: {paper_wallet.balance_sol():.4f} SOL  +  {paper_wallet.balance_usdt():.2f} USDT  "
-            f"(holdings={len(paper_wallet.holdings)})"
+
+        sol_bal = paper_wallet.balance_sol()
+        usdt_bal = paper_wallet.balance_usdt()
+        # Liquid equity = cash only (holdings valued at cost basis since
+        # we don't have live prices here).
+        holdings_cost_sol = sum(
+            h.amount * h.avg_cost_sol for h in paper_wallet.holdings.values()
         )
+        equity_usd = (sol_bal + holdings_cost_sol) * _SOL_USD_DEFAULT + usdt_bal
+        start_usd = settings.paper_starting_balance_usdt
+        total_pl_usd = equity_usd - start_usd
+        total_pl_pct = (total_pl_usd / start_usd * 100) if start_usd > 0 else 0.0
+
+        realized = compute_realized_pnl(_SOL_USD_DEFAULT)
+        pnl_emoji = "🟢" if total_pl_usd >= 0 else "🔴"
+
+        msg = (
+            f"PAPER Wallet\n"
+            f"────────────\n"
+            f"Cash: {sol_bal:.4f} SOL + {usdt_bal:.2f} USDT\n"
+            f"Holdings: {len(paper_wallet.holdings)} "
+            f"(@ cost: {holdings_cost_sol:.4f} SOL)\n"
+            f"Equity (approx): ${equity_usd:.2f}\n"
+            f"────────────\n"
+            f"{pnl_emoji} Total P/L: ${total_pl_usd:+.2f} ({total_pl_pct:+.2f}%)\n"
+            f"   Start: ${start_usd:.2f}\n"
+            f"Realized: {realized.total_sol:+.4f} SOL (${realized.total_usd_approx:+.2f})\n"
+            f"Closed trades: {realized.trades} "
+            f"({realized.wins}W / {realized.losses}L, {realized.winrate:.0%})"
+        )
+        await update.message.reply_text(msg)
 
     async def _h_buy(self, update, context) -> None:
         if not self._auth_ok(update) or self._on_buy is None:
