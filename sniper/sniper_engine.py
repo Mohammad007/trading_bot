@@ -57,16 +57,20 @@ class SniperEngine:
         self._stop.set()
 
     async def run(self) -> None:
-        log.info("Sniper engine starting (mode=%s).", settings.mode)
+        log.info("Sniper engine starting (mode=%s, pumpfun_only=%s).",
+                 settings.mode, settings.pumpfun_only)
         tasks = [
             asyncio.create_task(self._loop_pumpfun_ws(), name="pumpfun_ws"),
             asyncio.create_task(self._loop_pumpfun_poll(), name="pumpfun_poll"),
-            asyncio.create_task(self._loop_dexscreener_trending(), name="dexscreener"),
-            asyncio.create_task(self._loop_raydium_pools(), name="raydium"),
-            asyncio.create_task(self._loop_meteora_pairs(), name="meteora"),
-            asyncio.create_task(self._loop_launchlab(), name="launchlab"),
             asyncio.create_task(self._loop_cleanup(), name="cleanup"),
         ]
+        if not settings.pumpfun_only:
+            tasks.extend([
+                asyncio.create_task(self._loop_dexscreener_trending(), name="dexscreener"),
+                asyncio.create_task(self._loop_raydium_pools(), name="raydium"),
+                asyncio.create_task(self._loop_meteora_pairs(), name="meteora"),
+                asyncio.create_task(self._loop_launchlab(), name="launchlab"),
+            ])
         try:
             await self._stop.wait()
         finally:
@@ -247,6 +251,8 @@ class SniperEngine:
 
     async def _handle_snapshot(self, snap: TokenSnapshot, source: str) -> None:
         if not snap.mint or snap.mint in self._seen:
+            return
+        if settings.pumpfun_only and (snap.dex or "").lower() != "pumpfun":
             return
         if db.is_blacklisted(snap.mint):
             return

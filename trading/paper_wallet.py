@@ -149,14 +149,14 @@ class PaperWallet:
             log.warning("paper_wallet.save() failed (will retry next trade): %s", exc)
 
     def _initialize_fresh(self) -> None:
+        # Allocate the full starting balance to SOL — that's the only asset
+        # the engine actually spends. Splitting half into idle USDT leaves
+        # half the bankroll untradeable.
         usdt = settings.paper_starting_balance_usdt
-        self.usdt_balance = usdt
-        # Convert half the USDT into SOL so we can trade.
-        sol_from_usdt = (usdt * 0.5) / _SOL_USD_DEFAULT
-        self.sol_balance = sol_from_usdt
-        self.usdt_balance = usdt * 0.5
+        self.sol_balance = usdt / _SOL_USD_DEFAULT
+        self.usdt_balance = 0.0
         self.holdings = {}
-        log.info("Initialized paper wallet: %.4f SOL + %.2f USDT", self.sol_balance, self.usdt_balance)
+        log.info("Initialized paper wallet: %.4f SOL (~$%.2f)", self.sol_balance, usdt)
 
     # -- read API ------------------------------------------------------------
 
@@ -175,6 +175,23 @@ class PaperWallet:
         for mint, h in self.holdings.items():
             equity += h.amount * prices_sol.get(mint, h.avg_cost_sol)
         return equity
+
+    async def topup(self, amount_usd: float) -> float:
+        """Add USD-worth of SOL to the paper wallet (manual refill).
+
+        Returns the SOL amount credited. Used by the Telegram /topup command
+        when the wallet runs dry during a session.
+        """
+        amount_usd = float(amount_usd)
+        if amount_usd <= 0:
+            return 0.0
+        sol_added = amount_usd / _SOL_USD_DEFAULT
+        async with self._lock:
+            self.sol_balance = float(self.sol_balance + sol_added)
+            self.save()
+        log.info("[PAPER TOPUP] +$%.2f (+%.4f SOL)  new balance=%.4f SOL",
+                 amount_usd, sol_added, self.sol_balance)
+        return sol_added
 
     # -- write API -----------------------------------------------------------
 

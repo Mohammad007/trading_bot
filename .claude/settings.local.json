@@ -32,7 +32,23 @@
       "Bash(git -C d:/trading_bot show 9e2a7fa --stat)",
       "Bash(git -C d:/trading_bot show 9e2a7fa -- ai/smart_entry.py)",
       "Bash(cd /d d:/trading_bot)",
-      "Bash(python main.py)"
+      "Bash(python main.py)",
+      "Bash(type paper_wallet.json 2>nul || echo \"\\(no paper_wallet.json found\\)\")",
+      "Bash(dir paper_wallet.json /b)",
+      "Bash(dir data\\\\paper_wallet.json /b)",
+      "Bash(dir D:\\\\Trading\\\\trading_bot\\\\*.json /b)",
+      "Bash(where /r D:\\\\Trading\\\\trading_bot paper_wallet.json 2>nul)",
+      "Bash(del paper_wallet.json)",
+      "PowerShell(Remove-Item paper_wallet.json -Force; if \\(-not \\(Test-Path paper_wallet.json\\)\\) { \"deleted\" } else { \"still exists\" })",
+      "PowerShell(if \\(Test-Path database.db\\) { \"found: $\\(\\(Get-Item database.db\\).Length\\) bytes\" } else { \"no db\" })",
+      "Bash(grep -r \"pump\" \"d:\\\\Trading\\\\trading_bot\" --include=\"*.py\" ! -path \"*/.venv/*\")",
+      "Bash(grep -rn \"\\\\.dex\" \"d:\\\\Trading\\\\trading_bot\" --include=\"*.py\" ! -path \"*/.venv/*\")",
+      "Bash(grep -rn \"dex\" \"d:\\\\Trading\\\\trading_bot\" --include=\"*.py\" ! -path \"*/.venv/*\")",
+      "Bash(grep -rn \"if.*dex\" \"d:\\\\Trading\\\\trading_bot\" --include=\"*.py\" ! -path \"*/.venv/*\")"
+    ],
+    "additionalDirectories": [
+      "d:\\Trading\\trading_bot",
+      "D:\\Trading\\trading_bot"
     ]
   }
 }

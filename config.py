@@ -62,6 +62,11 @@ class Settings(BaseModel):
     # Multi-chain
     enabled_chains: List[str] = Field(default_factory=lambda: ["solana"])
 
+    # Pump.fun-only mode: ignore all other DEXs / sources / chains.
+    # When true the sniper only runs the pump.fun WS + REST feeds and
+    # rejects any snapshot whose dex != "pumpfun" as a safety net.
+    pumpfun_only: bool = True
+
     # RPC (Solana)
     solana_rpc_url: str = "https://api.mainnet-beta.solana.com"
     solana_ws_url: str = "wss://api.mainnet-beta.solana.com"
@@ -218,6 +223,7 @@ def load_settings() -> Settings:
         mode=_get("MODE", "PAPER"),
         enable_real_trading=_get_bool("ENABLE_REAL_TRADING", False),
         enabled_chains=_split_csv(_get("ENABLED_CHAINS", "solana")),
+        pumpfun_only=_get_bool("PUMPFUN_ONLY", True),
         solana_rpc_url=_get("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com"),
         solana_ws_url=_get("SOLANA_WS_URL", "wss://api.mainnet-beta.solana.com"),
         helius_api_key=_get("HELIUS_API_KEY", ""),

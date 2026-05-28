@@ -4,11 +4,12 @@ Telegram alerts + control commands.
 Commands:
   /start, /stop          - pause / resume the engine
   /positions             - list open positions
-  /balance               - show paper or real balances
+  /balance               - show paper or real balances + P/L
   /buy <mint> [amount]   - manual buy (paper mode only by default)
   /sell <mint>           - manual sell
   /mode                  - show current mode
   /winrate               - winrate summary
+  /topup <usd>           - add USD to paper wallet (paper only)
 
 If TELEGRAM_ENABLED=false or no token configured, this module silently
 no-ops, so it's safe to import unconditionally.
@@ -77,6 +78,7 @@ class TelegramBot:
         self.app.add_handler(CommandHandler("sell", self._h_sell))
         self.app.add_handler(CommandHandler("mode", self._h_mode))
         self.app.add_handler(CommandHandler("winrate", self._h_winrate))
+        self.app.add_handler(CommandHandler("topup", self._h_topup))
 
         # Swallow polling-loop errors (e.g. Conflict when a stale instance is
         # still holding the long-poll). The Updater retries automatically.
@@ -240,6 +242,35 @@ class TelegramBot:
             await update.message.reply_text(f"Sell requested: {args[0][:8]}")
         except Exception as exc:
             await update.message.reply_text(f"Sell failed: {exc}")
+
+    async def _h_topup(self, update, context) -> None:
+        if not self._auth_ok(update):
+            return
+        if settings.is_real:
+            await update.message.reply_text(
+                "Topup is paper-only. Real mode needs funds sent to the wallet."
+            )
+            return
+        args = context.args or []
+        if not args:
+            await update.message.reply_text("Usage: /topup <usd_amount>   e.g. /topup 50")
+            return
+        try:
+            amount = float(args[0])
+        except ValueError:
+            await update.message.reply_text("Invalid amount. Usage: /topup <usd_amount>")
+            return
+        if amount <= 0:
+            await update.message.reply_text("Amount must be positive.")
+            return
+
+        from trading.paper_wallet import paper_wallet, _SOL_USD_DEFAULT
+        sol_added = await paper_wallet.topup(amount)
+        await update.message.reply_text(
+            f"PAPER topup OK\n"
+            f"+${amount:.2f}  (+{sol_added:.4f} SOL @ ${_SOL_USD_DEFAULT:.0f}/SOL)\n"
+            f"New balance: {paper_wallet.balance_sol():.4f} SOL"
+        )
 
     async def _h_winrate(self, update, context) -> None:
         if not self._auth_ok(update):
