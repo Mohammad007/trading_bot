@@ -166,52 +166,62 @@ class TelegramBot:
             return
         from trading.paper_wallet import paper_wallet, _SOL_USD_DEFAULT
         from analytics.pnl import compute_realized_pnl
+
         if settings.is_real:
             from trading.real_wallet import get_real_wallet
             w = await get_real_wallet()
             if w:
                 sol = await w.get_sol_balance()
+                balance_usdt = sol * _SOL_USD_DEFAULT
                 realized = compute_realized_pnl(_SOL_USD_DEFAULT)
-                pnl_emoji = "🟢" if realized.total_sol >= 0 else "🔴"
+                profit_usdt = max(realized.total_usd_approx, 0.0)
+                loss_usdt = max(-realized.total_usd_approx, 0.0)
+                emoji = "🟢" if realized.total_usd_approx >= 0 else "🔴"
                 await update.message.reply_text(
-                    f"REAL wallet: {sol:.4f} SOL\n"
-                    f"{pnl_emoji} Realized PnL: {realized.total_sol:+.4f} SOL "
-                    f"(${realized.total_usd_approx:+.2f})\n"
-                    f"Closed trades: {realized.trades}  "
-                    f"({realized.wins}W / {realized.losses}L, {realized.winrate:.0%})"
+                    f"REAL Wallet\n"
+                    f"────────────\n"
+                    f"Balance: ${balance_usdt:.2f}\n"
+                    f"{emoji} Profit: ${profit_usdt:.2f}\n"
+                    f"🔻 Loss:   ${loss_usdt:.2f}\n"
+                    f"────────────\n"
+                    f"Trades: {realized.trades} "
+                    f"({realized.wins}W / {realized.losses}L)"
                 )
                 return
             await update.message.reply_text("Real wallet not loaded.")
             return
 
+        # PAPER mode — all values in USDT only.
         sol_bal = paper_wallet.balance_sol()
         usdt_bal = paper_wallet.balance_usdt()
-        # Liquid equity = cash only (holdings valued at cost basis since
-        # we don't have live prices here).
         holdings_cost_sol = sum(
             h.amount * h.avg_cost_sol for h in paper_wallet.holdings.values()
         )
-        equity_usd = (sol_bal + holdings_cost_sol) * _SOL_USD_DEFAULT + usdt_bal
-        start_usd = settings.paper_starting_balance_usdt
-        total_pl_usd = equity_usd - start_usd
-        total_pl_pct = (total_pl_usd / start_usd * 100) if start_usd > 0 else 0.0
+        balance_usdt = sol_bal * _SOL_USD_DEFAULT + usdt_bal
+        invested_usdt = holdings_cost_sol * _SOL_USD_DEFAULT
+        equity_usdt = balance_usdt + invested_usdt
+        start_usdt = settings.paper_starting_balance_usdt
+        total_pl_usdt = equity_usdt - start_usdt
+        pl_pct = (total_pl_usdt / start_usdt * 100) if start_usdt > 0 else 0.0
 
         realized = compute_realized_pnl(_SOL_USD_DEFAULT)
-        pnl_emoji = "🟢" if total_pl_usd >= 0 else "🔴"
+        profit_usdt = max(realized.total_usd_approx, 0.0)
+        loss_usdt = max(-realized.total_usd_approx, 0.0)
+        emoji = "🟢" if total_pl_usdt >= 0 else "🔴"
 
         msg = (
             f"PAPER Wallet\n"
             f"────────────\n"
-            f"Cash: {sol_bal:.4f} SOL + {usdt_bal:.2f} USDT\n"
-            f"Holdings: {len(paper_wallet.holdings)} "
-            f"(@ cost: {holdings_cost_sol:.4f} SOL)\n"
-            f"Equity (approx): ${equity_usd:.2f}\n"
+            f"Balance:  ${balance_usdt:.2f} USDT\n"
+            f"Invested: ${invested_usdt:.2f} USDT  ({len(paper_wallet.holdings)} open)\n"
+            f"Total:    ${equity_usdt:.2f} USDT\n"
             f"────────────\n"
-            f"{pnl_emoji} Total P/L: ${total_pl_usd:+.2f} ({total_pl_pct:+.2f}%)\n"
-            f"   Start: ${start_usd:.2f}\n"
-            f"Realized: {realized.total_sol:+.4f} SOL (${realized.total_usd_approx:+.2f})\n"
-            f"Closed trades: {realized.trades} "
-            f"({realized.wins}W / {realized.losses}L, {realized.winrate:.0%})"
+            f"🟢 Profit: ${profit_usdt:.2f}\n"
+            f"🔻 Loss:   ${loss_usdt:.2f}\n"
+            f"{emoji} Net P/L: ${total_pl_usdt:+.2f}  ({pl_pct:+.2f}%)\n"
+            f"────────────\n"
+            f"Trades: {realized.trades} "
+            f"({realized.wins}W / {realized.losses}L)"
         )
         await update.message.reply_text(msg)
 
